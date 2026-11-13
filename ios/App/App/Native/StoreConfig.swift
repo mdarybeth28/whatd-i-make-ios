@@ -16,23 +16,22 @@ import Foundation
 /// in-app purchase (Face ID, done inside the app) rather than
 /// sending people out to the website to pay.
 ///
-/// APPLE IAP DOOR: the product ID below is PROPOSED — a named
-/// constant, not an App Store Connect fact yet. When the Paid
-/// Apps paperwork clears, ONE auto-renewable subscription
-/// product must be created in App Store Connect with EXACTLY
-/// this ID, at $12/month:
+/// APPLE IAP DOOR: ONE auto-renewable subscription product in
+/// App Store Connect with EXACTLY this ID, at $12/month:
 ///   - com.marybethsfinds.whatdimake.monthly
-/// The bundle id (com.marybethsfinds.whatdimake) is likewise
-/// PROPOSED — it locks only at first submission.
+/// (Created 2026-11-13, with the "What'd I Make? Premium"
+/// group — see TRACKER-IOS-STATUS.md.)
 ///
-/// IAP BRIDGE (LATER PHASE — not in this build): the server gate
-/// reads only the users.subscription_status / trial fields in
-/// its SQLite DB, which today are written by the Stripe webhook.
-/// Apple purchases will need a small server endpoint (the "IAP
-/// bridge") that verifies the App Store receipt and writes
-/// subscription_status the same way, plus App Store Server
-/// Notifications for renewals/cancellations. No StoreKit code
-/// ships in Phase 1 at all.
+/// IAP BRIDGE (PHASE 2 — built): the gate reads only the
+/// users.subscription_status / trial fields in the server's
+/// SQLite DB. The bridge (src/routes/apple-iap.js on the
+/// server) verifies Apple's signed transaction itself and
+/// writes subscription_status the way the Stripe webhook
+/// does; App Store Server Notifications land on its second
+/// endpoint for renewals, failures, expiries and revokes.
+/// The app's part is small: StoreKit runs the purchase, the
+/// signed transaction is POSTed to /billing/apple/verify,
+/// and /auth/me is re-asked. Access is never granted locally.
 enum StoreConfig {
     // MARK: Server
 

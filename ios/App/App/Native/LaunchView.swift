@@ -1,9 +1,7 @@
 import SwiftUI
 
 /// The app's front door: routes by the session state, nothing
-/// else. (Phase 1 has no tab bar yet — the data screens arrive
-/// in a later phase, and this view grows the tabs then, the
-/// way the Keeper apps' root views did.)
+/// else.
 ///
 /// - restoring: a brief loading state while /auth/me answers.
 /// - signedOut / working: the sign-in form (with the road to
@@ -11,9 +9,16 @@ import SwiftUI
 ///   and what the user typed — stays on screen during a
 ///   sign-in attempt.
 /// - subscriptionRequired: the paywall (the server's gate said
-///   signed in, no access).
-/// - signedIn: the home placeholder, which proves the auth
-///   round-trip end to end and nothing more.
+///   signed in, no access) — now with the real Apple purchase
+///   button (Phase 2).
+/// - signedIn: HomeView — the tab bar with the data screens
+///   (Phase 2), at website parity for the core flows.
+///
+/// COLOR PIN (Phase 2, the Pet build-3 lesson): the root view
+/// is pinned to the light color scheme. Without it, semantic
+/// colors flip in dark traits and text can render white on the
+/// app's cream surfaces. The pin lives here, on the one root
+/// view every branch passes through, so no screen can miss it.
 struct LaunchView: View {
     @StateObject private var session = SessionStore()
 
@@ -27,7 +32,7 @@ struct LaunchView: View {
                         .foregroundStyle(.secondary)
                 }
             } else if session.state == .signedIn {
-                HomePlaceholderView()
+                HomeView()
             } else if session.state == .subscriptionRequired {
                 PaywallView()
             } else {
@@ -37,6 +42,7 @@ struct LaunchView: View {
             }
         }
         .environmentObject(session)
+        .preferredColorScheme(.light)
         .task {
             await session.restore()
         }

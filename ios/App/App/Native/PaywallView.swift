@@ -1,22 +1,23 @@
 import SwiftUI
 
-/// The paywall — shown when the server's gate says this account
-/// is signed in but has no access (the free week ended, or a
-/// subscription lapsed). It carries the web gate's own plain
-/// facts: What'd I Make? is $12/month, and access is decided by
-/// the server, never by this screen.
+/// The paywall — shown when the server's gate says this
+/// account is signed in but has no access (the free week
+/// ended, or a subscription lapsed).
 ///
-/// PHASE 1 SHAPE: there is deliberately NO purchase button
-/// yet. The Apple product does not exist until it is created
-/// in App Store Connect (after the Paid Apps paperwork
-/// clears), and the server's IAP bridge is a later phase too.
-/// What ships now is the honest screen around that future
-/// button: the explanation, the account it applies to, a
-/// "Restore / check again" that re-asks the server, and
-/// sign-out.
+/// PHASE 2: the purchase button is real. It runs Apple's
+/// StoreKit purchase for the $12/month product (the settled
+/// price — the same on web and in the app, Mary's call), and
+/// a verified purchase is confirmed with the server's Apple
+/// bridge (POST /billing/apple/verify), which writes
+/// subscription_status the way the Stripe webhook does. The
+/// gate is then re-asked. This screen never grants access by
+/// itself: if the server doesn't say yes, nobody gets in —
+/// the same rule as the website's Stripe door.
 struct PaywallView: View {
     @EnvironmentObject private var session: SessionStore
-    @State private var isChecking = false
+    @StateObject private var subs = SubscriptionStore()
+    @State private var isConfirming = false
+    @State private var note: String?
 
     var body: some View {
         ScrollView {
@@ -28,11 +29,18 @@ struct PaywallView: View {
                         .foregroundStyle(.secondary)
                 }
                 statusSection
+                subscribeSection
                 checkAgainRow
                 signOutRow
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .task {
+            subs.onVerifiedTransaction = { jws in
+                await confirmWithServer(jws)
+            }
+            subs.start()
         }
     }
 
@@ -60,30 +68,65 @@ struct PaywallView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-        // FUTURE PURCHASE BUTTON SPOT (Phase 3): the "Subscribe —
-        // $12/month" button goes here. It will present Apple's
-        // StoreKit purchase for StoreConfig.monthlyProductID and
-        // then confirm through the server's IAP bridge, which
-        // writes subscription_status the way the Stripe webhook
-        // does today. Until the App Store Connect product and
-        // the bridge exist, no button is shown — a button that
-        // cannot finish would be a lie on the screen.
+    }
+
+    private var subscribeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                Task {
+                    if let jws = await subs.purchase() {
+                        await confirmWithServer(jws)
+                    }
+                }
+            } label: {
+                HStack {
+                    Spacer()
+                    if subs.isBusy || isConfirming { ProgressView() }
+                    Text("Subscribe — " + (subs.product?.displayPrice ?? "$12") + "/month")
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(subs.isBusy || isConfirming)
+
+            Button {
+                Task {
+                    if let jws = await subs.restore() {
+                        await confirmWithServer(jws)
+                    } else if subs.phase == .idle {
+                        note = "Apple didn't find a subscription to restore for this account."
+                    }
+                }
+            } label: {
+                Text("Restore purchases")
+                    .fontWeight(.semibold)
+            }
+            .disabled(subs.isBusy || isConfirming)
+
+            if case .failed(let message) = subs.phase {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+            }
+            if let note {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Payment goes through Apple with Face ID — no card typed here. Cancel anytime in your Apple subscriptions. Subscribing on the website instead works too; it's the same account and the same price.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var checkAgainRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                isChecking = true
-                Task {
-                    await session.refreshAccess()
-                    isChecking = false
-                }
+                Task { await session.refreshAccess() }
             } label: {
-                HStack {
-                    if isChecking { ProgressView() }
-                    Text("Restore / check again")
-                        .fontWeight(.semibold)
-                }
+                Text("Check again")
+                    .fontWeight(.semibold)
             }
             Text("Just paid, or renewed on the website? Tap this and the app asks the server again — if your account has access now, you go straight in.")
                 .font(.footnote)
@@ -97,5 +140,29 @@ struct PaywallView: View {
         } label: {
             Text("Sign out")
         }
+    }
+
+    // MARK: - Server confirmation
+
+    /// Sends one verified transaction to the server bridge,
+    /// then re-asks the gate. The bridge verifies Apple's
+    /// signature itself — the app only carries the message.
+    private func confirmWithServer(_ jws: String) async {
+        isConfirming = true
+        note = nil
+        do {
+            let response = try await APIClient.shared.post("/billing/apple/verify", json: ["signedTransaction": jws])
+            if response.status == 200 {
+                await session.refreshAccess()
+                if session.state == .subscriptionRequired {
+                    note = "Apple confirmed the purchase, but the server hasn't opened the door yet. Give it a moment and tap Check again."
+                }
+            } else {
+                note = response.serverMessage ?? "The server couldn't confirm that purchase yet. Tap Check again in a moment — if it keeps happening, tell Mary."
+            }
+        } catch {
+            note = "Could not reach the server to confirm the purchase. Check your connection and tap Check again."
+        }
+        isConfirming = false
     }
 }

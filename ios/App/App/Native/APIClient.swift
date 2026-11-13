@@ -85,6 +85,36 @@ final class APIClient {
         try await send(path: path, method: "POST", jsonBody: json)
     }
 
+    func put(_ path: String, json: [String: Any]) async throws -> APIResponse {
+        try await send(path: path, method: "PUT", jsonBody: json)
+    }
+
+    func delete(_ path: String) async throws -> APIResponse {
+        try await send(path: path, method: "DELETE", jsonBody: nil)
+    }
+
+    /// POSTs raw bytes with an explicit content type — the
+    /// vision reader's door (POST /api/vision/scan?kind=…): the
+    /// server takes the photo itself as the request body, the
+    /// same shape the website's scan sends. A longer timeout
+    /// than the default: the reader can take a while.
+    func postRaw(_ path: String, data: Data, contentType: String) async throws -> APIResponse {
+        guard let url = URL(string: path, relativeTo: StoreConfig.baseURL) else {
+            throw APIClientError.badPath(path)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        let (responseData, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError.notHTTPResponse
+        }
+        saveMirror()
+        return APIResponse(status: http.statusCode, data: responseData)
+    }
+
     // MARK: - Auth endpoints (the server's own routes)
 
     func login(email: String, password: String) async throws -> APIResponse {
