@@ -28,7 +28,7 @@ final class SubscriptionStore: ObservableObject {
         case failed(message: String)
     }
 
-    @Published private(set) var product: Product?
+    @Published private(set) var product: StoreKit.Product?
     @Published private(set) var phase: Phase = .idle
 
     /// Set by the paywall: receives the signed transaction
@@ -73,7 +73,7 @@ final class SubscriptionStore: ObservableObject {
     func loadProduct() async {
         phase = .loadingProducts
         do {
-            let loaded = try await Product.products(for: StoreConfig.allProductIDs)
+            let loaded = try await StoreKit.Product.products(for: StoreConfig.allProductIDs)
             product = loaded.first { $0.id == StoreConfig.monthlyProductID }
             phase = .idle
         } catch {
