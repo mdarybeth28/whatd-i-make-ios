@@ -24,8 +24,7 @@ struct SignUpView: View {
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
-                SecureField("Password (8 or more characters)", text: $password)
-                    .textContentType(.newPassword)
+                PasswordField(placeholder: "Password (8 or more characters)", text: $password, contentType: .newPassword)
             }
             Section {
                 Label("7 days free, no card needed. After the free week it is " + StoreConfig.priceDisplay + ".", systemImage: "calendar.badge.clock")

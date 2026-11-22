@@ -13,6 +13,14 @@ struct SignInView: View {
     var body: some View {
         Form {
             Section {
+                Text("\u{1F4B5} Know what you actually made.")
+                    .font(.headline)
+                Text("What'd I Make? keeps your products, videos, sales and costs from all your shops in one place \u2014 and shows your real profit.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("7 days free, no card needed. Then " + StoreConfig.priceDisplay + ". No ads, ever.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Text("Sign in with the same email and password you use on whatdimake.com.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -23,8 +31,7 @@ struct SignInView: View {
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
-                SecureField("Password", text: $password)
-                    .textContentType(.password)
+                PasswordField(placeholder: "Password", text: $password, contentType: .password)
             }
             if let error = session.lastError {
                 Section {
@@ -67,5 +74,43 @@ struct SignInView: View {
             }
         }
         .navigationTitle("What'd I Make?")
+    }
+}
+
+
+// MARK: - Password field with show / hide eye
+
+/// A password box with a little eye at the right end: tap it to
+/// see what you typed, tap again to hide it. The testers asked
+/// for this \u2014 mistyped passwords are the top reason a sign-in
+/// fails.
+struct PasswordField: View {
+    let placeholder: String
+    @Binding var text: String
+    var contentType: UITextContentType = .password
+    @State private var isVisible = false
+
+    var body: some View {
+        HStack {
+            Group {
+                if isVisible {
+                    TextField(placeholder, text: $text)
+                } else {
+                    SecureField(placeholder, text: $text)
+                }
+            }
+            .textContentType(contentType)
+            .autocapitalization(.none)
+            .autocorrectionDisabled()
+
+            Button {
+                isVisible.toggle()
+            } label: {
+                Image(systemName: isVisible ? "eye.slash" : "eye")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isVisible ? "Hide password" : "Show password")
+        }
     }
 }
